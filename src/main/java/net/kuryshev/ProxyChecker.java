@@ -25,7 +25,6 @@ public class ProxyChecker {
                 userAgent("Mozilla/5.0 (Windows NT 6.3; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0").
                 referrer("").
                 get();
-        System.out.println(proxy + " is checked");
         return document != null;
     }
 }
