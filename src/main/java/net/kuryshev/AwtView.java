@@ -10,11 +10,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class AwtView extends Frame {
-    private static final int NUM_THREADS = 5;
-    private ExecutorService poolExecutor = Executors.newFixedThreadPool(NUM_THREADS);
+    private static final int DEFAULT_TIMEOUT = 2000;
+    private static final int DEFAULT_NUM_THREADS = 5;
+    private static final String DEFAULT_URL = "http://yandex.ru";
+    private ExecutorService poolExecutor = Executors.newFixedThreadPool(DEFAULT_NUM_THREADS);
 
     private Button checkButton, stopButton;
     private TextArea inputArea, goodProxiesArea, badProxiesArea;
+    private TextField threadsField, urlField, timeoutField;
+    private String url;
+    private int numThreads, timeout;
+    private ProxyChecker proxyChecker;
 
 
     public AwtView() throws HeadlessException {
@@ -26,33 +32,97 @@ public class AwtView extends Frame {
             }
         });
         setLayout(new BorderLayout());
-        setSize(715, 400);
+        setSize(880, 410);
         setResizable(false);
-        setLabels();
+        setTextFields();
         setAreas();
         setButtons();
         setVisible(true);
     }
 
-    private void setAreas() {
-        Container areaContainer = new Container();
-        areaContainer.setLayout(new FlowLayout());
-        inputArea = new TextArea(20, 30);
-        goodProxiesArea = new TextArea(20, 30);
-        badProxiesArea = new TextArea(20, 30);
-        areaContainer.add(inputArea);
-        areaContainer.add(goodProxiesArea);
-        areaContainer.add(badProxiesArea);
-        add(areaContainer, BorderLayout.CENTER);
+    private void setTextFields() {
+        urlField = new TextField(DEFAULT_URL);
+        threadsField = new TextField(DEFAULT_NUM_THREADS + "");
+        timeoutField = new TextField(DEFAULT_TIMEOUT + "");
+
+        Panel panel = new Panel();
+        panel.setSize(170,350);
+        GridBagLayout layout = new GridBagLayout();
+
+        panel.setLayout(layout);
+        GridBagConstraints gbc = new GridBagConstraints();
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        panel.add(new Label("URL: "),gbc);
+
+        gbc.insets = new Insets(0, 0, 100, 0);
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        panel.add(urlField, gbc);
+
+        gbc.insets = new Insets(0, 0, 0, 0);
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        panel.add(new Label("Число потоков: "),gbc);
+
+        gbc.insets = new Insets(0, 0, 100, 0);
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        panel.add(threadsField, gbc);
+
+        gbc.insets = new Insets(0, 0, 0, 0);
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        panel.add(new Label("Таймаут в мс: "),gbc);
+
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        panel.add(timeoutField, gbc);
+
+        add(panel, BorderLayout.WEST);
+
     }
 
-    private void setLabels() {
-        Container labelContainer = new Container();
-        labelContainer.setLayout(new GridLayout(1, 3, 0, 0));
-        labelContainer.add(new Label(" Прокси для проверки:"), 0);
-        labelContainer.add(new Label(" Хорошие:"), 1);
-        labelContainer.add(new Label(" Плохие:"), 2);
-        add(labelContainer, BorderLayout.NORTH);
+    private void setAreas() {
+        Panel panel = new Panel();
+        panel.setSize(710,350);
+        GridBagLayout layout = new GridBagLayout();
+
+        panel.setLayout(layout);
+        GridBagConstraints gbc = new GridBagConstraints();
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        panel.add(new Label("Прокси для проверки: "),gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        panel.add(new Label("Хорошие: "),gbc);
+
+        gbc.gridx = 2;
+        gbc.gridy = 0;
+        panel.add(new Label("Плохие: "),gbc);
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+       // gbc.ipady = 20;
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        inputArea = new TextArea(20, 30);
+        panel.add(inputArea, gbc);
+
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        goodProxiesArea = new TextArea(20, 30);
+        panel.add(goodProxiesArea, gbc);
+
+        gbc.gridx = 2;
+        gbc.gridy = 1;
+        badProxiesArea = new TextArea(20, 30);
+        panel.add(badProxiesArea, gbc);
+        add(panel, BorderLayout.CENTER);
     }
 
     private void setButtons() {
@@ -75,6 +145,10 @@ public class AwtView extends Frame {
     class CheckActionListener implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent ae) {
+            url = DEFAULT_URL;
+            timeout = DEFAULT_TIMEOUT;
+            numThreads = DEFAULT_NUM_THREADS;
+            proxyChecker = new ProxyChecker(url, timeout);
             new Thread(this::run).start();
         }
 
@@ -83,11 +157,9 @@ public class AwtView extends Frame {
             String[] proxies = inputString.split("\n");
             checkButton.setEnabled(false);
             stopButton.setEnabled(true);
-            poolExecutor = Executors.newFixedThreadPool(NUM_THREADS);
-            for (String proxy : proxies) {
-                Task task = new Task(proxy);
-                poolExecutor.submit(task);
-            }
+            poolExecutor = Executors.newFixedThreadPool(numThreads);
+            for (String proxy : proxies)
+                poolExecutor.submit(new Task(proxy));
             poolExecutor.shutdown();
             try {
                 poolExecutor.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
@@ -116,7 +188,7 @@ public class AwtView extends Frame {
         @Override
         public void run() {
             try {
-                if (ProxyChecker.isOk(proxy)) goodProxiesArea.setText(goodProxiesArea.getText() + proxy + "\n");
+                if (proxyChecker.isOk(proxy)) goodProxiesArea.setText(goodProxiesArea.getText() + proxy + "\n");
             } catch (Exception e) {
                 if (!proxy.isEmpty())
                     badProxiesArea.setText(badProxiesArea.getText() + proxy + " " + e.getMessage() + "\n");
