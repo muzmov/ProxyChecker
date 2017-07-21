@@ -1,11 +1,19 @@
 package net.kuryshev;
 
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class AwtView extends Frame {
-    private Button doCheckButton;
+    private static final int NUM_THREADS = 5;
+    private ExecutorService poolExecutor = Executors.newFixedThreadPool(NUM_THREADS);
+
+    private Button checkButton, stopButton;
     private TextArea inputArea, goodProxiesArea, badProxiesArea;
 
 
@@ -22,7 +30,7 @@ public class AwtView extends Frame {
         setResizable(false);
         setLabels();
         setAreas();
-        addCheckButton();
+        setButtons();
         setVisible(true);
     }
 
@@ -47,27 +55,72 @@ public class AwtView extends Frame {
         add(labelContainer, BorderLayout.NORTH);
     }
 
-    private void addCheckButton() {
-        doCheckButton = new Button("Проверить прокси");
-        add(doCheckButton, BorderLayout.SOUTH);
-        doCheckButton.addActionListener((ea) -> {
-            String inputString = inputArea.getText();
-            String[] proxies = inputString.split("\n");
-            doCheckButton.setEnabled(false);
-            for (String proxy : proxies) {
-                try {
-                    if (ProxyChecker.isOk(proxy)) goodProxiesArea.setText(goodProxiesArea.getText() + proxy + "\n");
-                } catch (Exception e) {
-                    if (!proxy.isEmpty())
-                        badProxiesArea.setText(badProxiesArea.getText() + proxy + " " + e.getMessage() + "\n");
-                }
-                repaint();
-            }
-            doCheckButton.setEnabled(true);
-        });
+    private void setButtons() {
+        Container buttonContainer = new Container();
+        buttonContainer.setLayout(new FlowLayout());
+        checkButton = new Button("Проверить прокси");
+        checkButton.addActionListener(new CheckActionListener());
+        buttonContainer.add(checkButton);
+        stopButton = new Button("Остановить проверку");
+        stopButton.addActionListener(new StopActionListener());
+        stopButton.setEnabled(false);
+        buttonContainer.add(stopButton);
+        add(buttonContainer, BorderLayout.SOUTH);
     }
 
     public static void main(String[] args) {
         new AwtView();
+    }
+
+    class CheckActionListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent ae) {
+            new Thread(this::run).start();
+        }
+
+        void run() {
+            String inputString = inputArea.getText();
+            String[] proxies = inputString.split("\n");
+            checkButton.setEnabled(false);
+            stopButton.setEnabled(true);
+            poolExecutor = Executors.newFixedThreadPool(NUM_THREADS);
+            for (String proxy : proxies) {
+                Task task = new Task(proxy);
+                poolExecutor.submit(task);
+            }
+            poolExecutor.shutdown();
+            try {
+                poolExecutor.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {/*NOP*/}
+            checkButton.setEnabled(true);
+            stopButton.setEnabled(false);
+        }
+    }
+
+    class StopActionListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            poolExecutor.shutdownNow();
+            checkButton.setEnabled(true);
+            stopButton.setEnabled(false);
+        }
+    }
+
+    class Task implements Runnable {
+        private String proxy;
+
+        Task(String proxy) {
+            this.proxy = proxy;
+        }
+
+        @Override
+        public void run() {
+            try {
+                if (ProxyChecker.isOk(proxy)) goodProxiesArea.setText(goodProxiesArea.getText() + proxy + "\n");
+            } catch (Exception e) {
+                if (!proxy.isEmpty())
+                    badProxiesArea.setText(badProxiesArea.getText() + proxy + " " + e.getMessage() + "\n");
+            }
+        }
     }
 }
