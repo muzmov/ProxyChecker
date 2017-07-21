@@ -13,6 +13,8 @@ public class AwtView extends Frame {
     private static final int DEFAULT_TIMEOUT = 2000;
     private static final int DEFAULT_NUM_THREADS = 5;
     private static final String DEFAULT_URL = "http://yandex.ru";
+    private static final int MIN_THREADS = 1, MAX_THREADS = 100;
+    private static final int MIN_TIMEOUT = 1, MAX_TIMEOUT = 10000;
     private ExecutorService poolExecutor = Executors.newFixedThreadPool(DEFAULT_NUM_THREADS);
 
     private Button checkButton, stopButton;
@@ -21,7 +23,6 @@ public class AwtView extends Frame {
     private String url;
     private int numThreads, timeout;
     private ProxyChecker proxyChecker;
-
 
     public AwtView() throws HeadlessException {
         super("Proxy Checker");
@@ -32,6 +33,7 @@ public class AwtView extends Frame {
             }
         });
         setLayout(new BorderLayout());
+        setLocationByPlatform(true);
         setSize(880, 410);
         setResizable(false);
         setTextFields();
@@ -65,7 +67,7 @@ public class AwtView extends Frame {
         gbc.insets = new Insets(0, 0, 0, 0);
         gbc.gridx = 0;
         gbc.gridy = 2;
-        panel.add(new Label("Число потоков: "),gbc);
+        panel.add(new Label("Число потоков (" + MIN_THREADS + " - " + MAX_THREADS + "): "), gbc);
 
         gbc.insets = new Insets(0, 0, 100, 0);
         gbc.gridx = 0;
@@ -75,7 +77,7 @@ public class AwtView extends Frame {
         gbc.insets = new Insets(0, 0, 0, 0);
         gbc.gridx = 0;
         gbc.gridy = 4;
-        panel.add(new Label("Таймаут в мс: "),gbc);
+        panel.add(new Label("Таймаут в мс (" + MIN_TIMEOUT + " - " + MAX_TIMEOUT + "): "), gbc);
 
         gbc.gridx = 0;
         gbc.gridy = 5;
@@ -107,7 +109,6 @@ public class AwtView extends Frame {
         panel.add(new Label("Плохие: "),gbc);
 
         gbc.fill = GridBagConstraints.HORIZONTAL;
-       // gbc.ipady = 20;
         gbc.gridx = 0;
         gbc.gridy = 1;
         inputArea = new TextArea(20, 30);
@@ -126,14 +127,15 @@ public class AwtView extends Frame {
     }
 
     private void setButtons() {
-        Container buttonContainer = new Container();
-        buttonContainer.setLayout(new FlowLayout());
         checkButton = new Button("Проверить прокси");
         checkButton.addActionListener(new CheckActionListener());
-        buttonContainer.add(checkButton);
         stopButton = new Button("Остановить проверку");
         stopButton.addActionListener(new StopActionListener());
         stopButton.setEnabled(false);
+
+        Container buttonContainer = new Container();
+        buttonContainer.setLayout(new FlowLayout());
+        buttonContainer.add(checkButton);
         buttonContainer.add(stopButton);
         add(buttonContainer, BorderLayout.SOUTH);
     }
@@ -145,9 +147,7 @@ public class AwtView extends Frame {
     class CheckActionListener implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent ae) {
-            url = DEFAULT_URL;
-            timeout = DEFAULT_TIMEOUT;
-            numThreads = DEFAULT_NUM_THREADS;
+            checkParams();
             proxyChecker = new ProxyChecker(url, timeout);
             new Thread(this::run).start();
         }
@@ -167,6 +167,29 @@ public class AwtView extends Frame {
             checkButton.setEnabled(true);
             stopButton.setEnabled(false);
         }
+    }
+
+    private void checkParams() {
+        url = urlField.getText();
+        if (url.isEmpty())
+            url = DEFAULT_URL;
+        try {
+            timeout = Integer.parseInt(timeoutField.getText());
+        } catch (NumberFormatException e) {
+            timeout = DEFAULT_TIMEOUT;
+        }
+        if (timeout < MIN_TIMEOUT || timeout > MAX_TIMEOUT)
+            timeout = DEFAULT_TIMEOUT;
+        try {
+            numThreads = Integer.parseInt(threadsField.getText());
+        } catch (NumberFormatException e) {
+            numThreads = DEFAULT_NUM_THREADS;
+        }
+        if (numThreads < MIN_THREADS || numThreads > MAX_THREADS)
+            numThreads = DEFAULT_NUM_THREADS;
+        urlField.setText(url);
+        timeoutField.setText(timeout + "");
+        threadsField.setText(numThreads + "");
     }
 
     class StopActionListener implements ActionListener {

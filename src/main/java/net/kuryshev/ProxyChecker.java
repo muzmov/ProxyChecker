@@ -8,17 +8,17 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 
 
-public class ProxyChecker {
+class ProxyChecker {
 
-    private String url = "http://yandex.ru";
-    private int timeout = 2000;
+    private String url;
+    private int timeout;
 
-    public ProxyChecker(String url, int timeout) {
+    ProxyChecker(String url, int timeout) {
         this.url = url;
         this.timeout = timeout;
     }
 
-    public boolean isOk(String proxyString) throws IOException {
+    boolean isOk(String proxyString) throws IOException {
         proxyString = proxyString.trim();
         String host = proxyString.split(":")[0];
         int port = Integer.parseInt(proxyString.split(":")[1]);
@@ -30,6 +30,7 @@ public class ProxyChecker {
                 userAgent("Mozilla/5.0 (Windows NT 6.3; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0").
                 referrer("").
                 get();
-        return document != null;
+        if (document.getElementsByTag("title").text().isEmpty()) throw new IOException("Empty title");
+        return true;
     }
 }
